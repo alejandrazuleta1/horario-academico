@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/horario-academico/static/css/main.03a60e7e.css",
+    "main.js": "/horario-academico/static/js/main.3b8b927e.js",
+    "index.html": "/horario-academico/index.html",
+    "main.03a60e7e.css.map": "/horario-academico/static/css/main.03a60e7e.css.map",
+    "main.3b8b927e.js.map": "/horario-academico/static/js/main.3b8b927e.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.03a60e7e.css",
+    "static/js/main.3b8b927e.js"
+  ]
+}
