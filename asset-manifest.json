@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/horario-academico/static/css/main.03a60e7e.css",
-    "main.js": "/horario-academico/static/js/main.3b8b927e.js",
+    "main.css": "/horario-academico/static/css/main.94202592.css",
+    "main.js": "/horario-academico/static/js/main.81c8c052.js",
     "index.html": "/horario-academico/index.html",
-    "main.03a60e7e.css.map": "/horario-academico/static/css/main.03a60e7e.css.map",
-    "main.3b8b927e.js.map": "/horario-academico/static/js/main.3b8b927e.js.map"
+    "main.94202592.css.map": "/horario-academico/static/css/main.94202592.css.map",
+    "main.81c8c052.js.map": "/horario-academico/static/js/main.81c8c052.js.map"
   },
   "entrypoints": [
-    "static/css/main.03a60e7e.css",
-    "static/js/main.3b8b927e.js"
+    "static/css/main.94202592.css",
+    "static/js/main.81c8c052.js"
   ]
 }
