@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Users, BookOpen, Clock, Plus, Trash2, Play, Download, Eye, Filter } from 'lucide-react';
+import { Calendar, Users, BookOpen, Clock, Plus, Trash2, Play, Download, Eye, Filter, Link } from 'lucide-react';
 import './App.css';
 
-// Utility functions for schedule generation
 const DAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
 
 function App() {
@@ -10,29 +9,23 @@ function App() {
   const [courses, setCourses] = useState([]);
   const [groups, setGroups] = useState([]);
   const [restrictions, setRestrictions] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [schedule, setSchedule] = useState(null);
   const [viewMode, setViewMode] = useState('general');
   const [selectedFilter, setSelectedFilter] = useState(null);
   const [activeTab, setActiveTab] = useState('teachers');
-  
-  // Time slots (8am to 6pm in 1-hour blocks)
+
   const [timeSlots] = useState([
-    '08:00', '09:00', '10:00', '11:00', '12:00', 
+    '08:00', '09:00', '10:00', '11:00', '12:00',
     '13:00', '14:00', '15:00', '16:00', '17:00'
   ]);
 
-  // Form states
   const [newTeacher, setNewTeacher] = useState({ name: '', maxHours: 20 });
-  const [newCourse, setNewCourse] = useState({ name: '', hoursPerWeek: 2, duration: 1 });
+  const [newCourse, setNewCourse] = useState({ name: '', duration: 1 });
   const [newGroup, setNewGroup] = useState({ name: '', capacity: 30 });
-  const [newRestriction, setNewRestriction] = useState({
-    type: 'teacher_unavailable',
-    teacherId: '',
-    day: '',
-    timeSlot: ''
-  });
+  const [newRestriction, setNewRestriction] = useState({ teacherId: '', day: '', timeSlot: '' });
+  const [newAssignment, setNewAssignment] = useState({ teacherId: '', courseId: '', groupId: '', hoursPerWeek: 2 });
 
-  // Load data from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('scheduleData');
     if (saved) {
@@ -41,17 +34,14 @@ function App() {
       setCourses(data.courses || []);
       setGroups(data.groups || []);
       setRestrictions(data.restrictions || []);
+      setAssignments(data.assignments || []);
     }
   }, []);
 
-  // Save data to localStorage
   useEffect(() => {
-    localStorage.setItem('scheduleData', JSON.stringify({
-      teachers, courses, groups, restrictions
-    }));
-  }, [teachers, courses, groups, restrictions]);
+    localStorage.setItem('scheduleData', JSON.stringify({ teachers, courses, groups, restrictions, assignments }));
+  }, [teachers, courses, groups, restrictions, assignments]);
 
-  // Add functions
   const addTeacher = () => {
     if (newTeacher.name.trim()) {
       setTeachers([...teachers, { ...newTeacher, id: Date.now() }]);
@@ -62,7 +52,7 @@ function App() {
   const addCourse = () => {
     if (newCourse.name.trim()) {
       setCourses([...courses, { ...newCourse, id: Date.now() }]);
-      setNewCourse({ name: '', hoursPerWeek: 2, duration: 1 });
+      setNewCourse({ name: '', duration: 1 });
     }
   };
 
@@ -76,143 +66,80 @@ function App() {
   const addRestriction = () => {
     if (newRestriction.teacherId && newRestriction.day && newRestriction.timeSlot) {
       setRestrictions([...restrictions, { ...newRestriction, id: Date.now() }]);
-      setNewRestriction({
-        type: 'teacher_unavailable',
-        teacherId: '',
-        day: '',
-        timeSlot: ''
-      });
+      setNewRestriction({ teacherId: '', day: '', timeSlot: '' });
     }
   };
 
-  // Delete functions
-  const deleteTeacher = (id) => setTeachers(teachers.filter(t => t.id !== id));
-  const deleteCourse = (id) => setCourses(courses.filter(c => c.id !== id));
-  const deleteGroup = (id) => setGroups(groups.filter(g => g.id !== id));
-  const deleteRestriction = (id) => setRestrictions(restrictions.filter(r => r.id !== id));
+  const addAssignment = () => {
+    const { teacherId, courseId, groupId, hoursPerWeek } = newAssignment;
+    if (!teacherId || !courseId || !groupId || !hoursPerWeek) return;
+    const exists = assignments.some(a => a.teacherId === teacherId && a.courseId === courseId && a.groupId === groupId);
+    if (exists) { alert('Ya existe esa asignación'); return; }
+    setAssignments([...assignments, { ...newAssignment, id: Date.now() }]);
+    setNewAssignment({ teacherId, courseId: '', groupId: '', hoursPerWeek: 2 });
+  };
 
-  // Schedule generation algorithm
+  const deleteTeacher = (id) => {
+    setTeachers(teachers.filter(t => t.id !== id));
+    setAssignments(assignments.filter(a => a.teacherId !== id.toString()));
+    setRestrictions(restrictions.filter(r => r.teacherId !== id.toString()));
+  };
+  const deleteCourse = (id) => { setCourses(courses.filter(c => c.id !== id)); setAssignments(assignments.filter(a => a.courseId !== id.toString())); };
+  const deleteGroup = (id) => { setGroups(groups.filter(g => g.id !== id)); setAssignments(assignments.filter(a => a.groupId !== id.toString())); };
+  const deleteRestriction = (id) => setRestrictions(restrictions.filter(r => r.id !== id));
+  const deleteAssignment = (id) => setAssignments(assignments.filter(a => a.id !== id));
+
+  const getTeacher = (id) => teachers.find(t => t.id.toString() === id.toString());
+  const getCourse  = (id) => courses.find(c => c.id.toString() === id.toString());
+  const getGroup   = (id) => groups.find(g => g.id.toString() === id.toString());
+
+  const teacherAssignedHours = (teacherId) =>
+    assignments.filter(a => a.teacherId === teacherId.toString()).reduce((sum, a) => sum + Number(a.hoursPerWeek), 0);
+
   const generateSchedule = () => {
-    if (teachers.length === 0 || courses.length === 0 || groups.length === 0) {
-      alert('Necesitas agregar al menos un profesor, un curso y un grupo');
+    if (assignments.length === 0) {
+      alert('Debes agregar al menos una asignación (Profesor → Curso → Grupo)');
       return;
     }
-
-    const assignments = [];
-    const teacherHours = {};
-    teachers.forEach(t => teacherHours[t.id] = 0);
-
-    // Create all possible assignments (course-group pairs)
-    const possibleAssignments = [];
-    groups.forEach(group => {
-      courses.forEach(course => {
-        possibleAssignments.push({
-          course,
-          group,
-          teacher: null,
-          day: null,
-          timeSlot: null,
-          scheduled: false
-        });
-      });
-    });
-
-    // Try to schedule each assignment
-    possibleAssignments.forEach(assignment => {
-      const { course, group } = assignment;
-      
-      // Find available teacher
-      for (const teacher of teachers) {
-        if (teacherHours[teacher.id] + course.hoursPerWeek <= teacher.maxHours) {
-          // Find available time slot
-          let scheduled = false;
-          
-          for (const day of DAYS) {
-            if (scheduled) break;
-            
-            for (let i = 0; i < timeSlots.length; i++) {
-              const timeSlot = timeSlots[i];
-              
-              // Check if teacher is available
-              const isRestricted = restrictions.some(r => 
-                r.teacherId === teacher.id.toString() && 
-                r.day === day && 
-                r.timeSlot === timeSlot
-              );
-              
-              if (isRestricted) continue;
-              
-              // Check if slot is free for teacher and group
-              const hasConflict = assignments.some(a => 
-                (a.teacher.id === teacher.id || a.group.id === group.id) &&
-                a.day === day &&
-                a.timeSlot === timeSlot
-              );
-              
-              if (hasConflict) continue;
-              
-              // Check if there are enough consecutive slots for the course
-              let slotsAvailable = true;
-              for (let j = 0; j < course.duration; j++) {
-                const nextSlot = timeSlots[i + j];
-                if (!nextSlot) {
-                  slotsAvailable = false;
-                  break;
-                }
-                
-                const nextConflict = assignments.some(a => 
-                  (a.teacher.id === teacher.id || a.group.id === group.id) &&
-                  a.day === day &&
-                  a.timeSlot === nextSlot
-                );
-                
-                if (nextConflict) {
-                  slotsAvailable = false;
-                  break;
-                }
-              }
-              
-              if (slotsAvailable) {
-                // Schedule the course
-                for (let j = 0; j < course.duration; j++) {
-                  assignments.push({
-                    id: Date.now() + Math.random(),
-                    course,
-                    group,
-                    teacher,
-                    day,
-                    timeSlot: timeSlots[i + j],
-                    slotPart: j === 0 ? 'start' : (j === course.duration - 1 ? 'end' : 'middle')
-                  });
-                }
-                
-                teacherHours[teacher.id] += course.hoursPerWeek;
-                scheduled = true;
-                break;
-              }
-            }
+    const scheduled = [];
+    for (const assignment of assignments) {
+      const teacher = getTeacher(assignment.teacherId);
+      const course  = getCourse(assignment.courseId);
+      const group   = getGroup(assignment.groupId);
+      if (!teacher || !course || !group) continue;
+      const sessionsNeeded = Math.ceil(Number(assignment.hoursPerWeek) / Number(course.duration));
+      let sessionsScheduled = 0;
+      for (const day of DAYS) {
+        if (sessionsScheduled >= sessionsNeeded) break;
+        for (let i = 0; i < timeSlots.length; i++) {
+          if (sessionsScheduled >= sessionsNeeded) break;
+          const isRestricted = restrictions.some(r => r.teacherId === teacher.id.toString() && r.day === day && r.timeSlot === timeSlots[i]);
+          if (isRestricted) continue;
+          let slotsAvailable = true;
+          for (let j = 0; j < course.duration; j++) {
+            if (!timeSlots[i + j]) { slotsAvailable = false; break; }
+            const conflict = scheduled.some(s => s.day === day && s.timeSlot === timeSlots[i + j] && (s.teacher.id === teacher.id || s.group.id === group.id));
+            if (conflict) { slotsAvailable = false; break; }
           }
-          
-          if (scheduled) break;
+          if (!slotsAvailable) continue;
+          for (let j = 0; j < course.duration; j++) {
+            scheduled.push({
+              id: Date.now() + Math.random(),
+              teacher, course, group,
+              day, timeSlot: timeSlots[i + j],
+              slotPart: j === 0 ? 'start' : (j === course.duration - 1 ? 'end' : 'middle')
+            });
+          }
+          sessionsScheduled++;
         }
       }
-    });
-
-    setSchedule(assignments);
+    }
+    setSchedule(scheduled);
     setViewMode('general');
   };
 
-  // Export schedule
   const exportSchedule = () => {
-    const data = {
-      teachers,
-      courses,
-      groups,
-      restrictions,
-      schedule,
-      generatedAt: new Date().toISOString()
-    };
-    
+    const data = { teachers, courses, groups, restrictions, assignments, schedule, generatedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -221,55 +148,34 @@ function App() {
     a.click();
   };
 
-  // Render schedule grid
   const renderScheduleGrid = () => {
     if (!schedule) return null;
-
-    let filteredSchedule = schedule;
-    if (viewMode === 'teacher' && selectedFilter) {
-      filteredSchedule = schedule.filter(s => s.teacher.id === selectedFilter);
-    } else if (viewMode === 'group' && selectedFilter) {
-      filteredSchedule = schedule.filter(s => s.group.id === selectedFilter);
-    }
-
+    let filtered = schedule;
+    if (viewMode === 'teacher' && selectedFilter) filtered = schedule.filter(s => s.teacher.id === selectedFilter);
+    else if (viewMode === 'group' && selectedFilter) filtered = schedule.filter(s => s.group.id === selectedFilter);
     return (
       <div className="schedule-grid">
         <div className="grid-header">
           <div className="time-column">Hora</div>
-          {DAYS.map(day => (
-            <div key={day} className="day-column">{day}</div>
-          ))}
+          {DAYS.map(day => <div key={day} className="day-column">{day}</div>)}
         </div>
-        
         {timeSlots.map(timeSlot => (
           <div key={timeSlot} className="grid-row">
             <div className="time-cell">{timeSlot}</div>
             {DAYS.map(day => {
-              const assignment = filteredSchedule.find(
-                s => s.day === day && s.timeSlot === timeSlot && s.slotPart === 'start'
-              );
-              
-              const isContinuation = filteredSchedule.some(
-                s => s.day === day && s.timeSlot === timeSlot && s.slotPart !== 'start'
-              );
-              
+              const items = filtered.filter(s => s.day === day && s.timeSlot === timeSlot && s.slotPart === 'start');
               return (
                 <div key={`${day}-${timeSlot}`} className="schedule-cell">
-                  {assignment && !isContinuation && (
-                    <div 
-                      className="assignment-card"
-                      style={{ 
-                        gridRow: `span ${assignment.course.duration}`,
-                        background: `hsl(${assignment.course.id % 360}, 70%, 85%)`
-                      }}
-                    >
-                      <div className="assignment-course">{assignment.course.name}</div>
+                  {items.map(item => (
+                    <div key={item.id} className="assignment-card"
+                      style={{ background: `hsl(${item.course.id % 360}, 65%, 88%)`, borderLeftColor: `hsl(${item.course.id % 360}, 65%, 45%)` }}>
+                      <div className="assignment-course">{item.course.name}</div>
                       <div className="assignment-info">
-                        {viewMode !== 'group' && <div>Grupo: {assignment.group.name}</div>}
-                        {viewMode !== 'teacher' && <div>Prof: {assignment.teacher.name}</div>}
+                        {viewMode !== 'group'   && <span>👥 {item.group.name}</span>}
+                        {viewMode !== 'teacher' && <span>👤 {item.teacher.name}</span>}
                       </div>
                     </div>
-                  )}
+                  ))}
                 </div>
               );
             })}
@@ -283,10 +189,7 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <div className="header-content">
-          <div className="logo">
-            <Calendar size={32} />
-            <h1>Generador de Horarios Académicos</h1>
-          </div>
+          <div className="logo"><Calendar size={32} /><h1>Generador de Horarios Académicos</h1></div>
           <p className="subtitle">Organiza profesores, cursos y grupos de manera eficiente</p>
         </div>
       </header>
@@ -295,34 +198,17 @@ function App() {
         {!schedule ? (
           <div className="setup-container">
             <div className="tabs">
-              <button 
-                className={activeTab === 'teachers' ? 'tab active' : 'tab'}
-                onClick={() => setActiveTab('teachers')}
-              >
-                <Users size={18} />
-                Profesores ({teachers.length})
-              </button>
-              <button 
-                className={activeTab === 'courses' ? 'tab active' : 'tab'}
-                onClick={() => setActiveTab('courses')}
-              >
-                <BookOpen size={18} />
-                Cursos ({courses.length})
-              </button>
-              <button 
-                className={activeTab === 'groups' ? 'tab active' : 'tab'}
-                onClick={() => setActiveTab('groups')}
-              >
-                <Users size={18} />
-                Grupos ({groups.length})
-              </button>
-              <button 
-                className={activeTab === 'restrictions' ? 'tab active' : 'tab'}
-                onClick={() => setActiveTab('restrictions')}
-              >
-                <Clock size={18} />
-                Restricciones ({restrictions.length})
-              </button>
+              {[
+                { key: 'teachers',     icon: <Users size={16} />,    label: 'Profesores',    count: teachers.length },
+                { key: 'courses',      icon: <BookOpen size={16} />, label: 'Cursos',         count: courses.length },
+                { key: 'groups',       icon: <Users size={16} />,    label: 'Grupos',         count: groups.length },
+                { key: 'assignments',  icon: <Link size={16} />,     label: 'Asignaciones',  count: assignments.length },
+                { key: 'restrictions', icon: <Clock size={16} />,    label: 'Restricciones', count: restrictions.length },
+              ].map(tab => (
+                <button key={tab.key} className={activeTab === tab.key ? 'tab active' : 'tab'} onClick={() => setActiveTab(tab.key)}>
+                  {tab.icon} {tab.label} ({tab.count})
+                </button>
+              ))}
             </div>
 
             <div className="tab-content">
@@ -330,38 +216,29 @@ function App() {
                 <div className="section">
                   <h2>Profesores</h2>
                   <div className="form-row">
-                    <input
-                      type="text"
-                      placeholder="Nombre del profesor"
-                      value={newTeacher.name}
-                      onChange={(e) => setNewTeacher({...newTeacher, name: e.target.value})}
-                      onKeyPress={(e) => e.key === 'Enter' && addTeacher()}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Horas máximas"
-                      value={newTeacher.maxHours}
-                      onChange={(e) => setNewTeacher({...newTeacher, maxHours: parseInt(e.target.value)})}
-                      style={{ width: '150px' }}
-                    />
-                    <button onClick={addTeacher} className="btn-add">
-                      <Plus size={18} />
-                      Agregar
-                    </button>
+                    <input type="text" placeholder="Nombre del profesor" value={newTeacher.name}
+                      onChange={e => setNewTeacher({ ...newTeacher, name: e.target.value })}
+                      onKeyPress={e => e.key === 'Enter' && addTeacher()} />
+                    <input type="number" placeholder="Horas máx/semana" style={{ width: 170 }} value={newTeacher.maxHours}
+                      onChange={e => setNewTeacher({ ...newTeacher, maxHours: parseInt(e.target.value) })} />
+                    <button onClick={addTeacher} className="btn-add"><Plus size={16} /> Agregar</button>
                   </div>
-                  
                   <div className="item-list">
-                    {teachers.map(teacher => (
-                      <div key={teacher.id} className="item-card">
-                        <div className="item-info">
-                          <strong>{teacher.name}</strong>
-                          <span className="item-meta">Máx: {teacher.maxHours}h/semana</span>
+                    {teachers.map(t => {
+                      const assigned = teacherAssignedHours(t.id);
+                      return (
+                        <div key={t.id} className="item-card">
+                          <div className="item-info">
+                            <strong>{t.name}</strong>
+                            <span className="item-meta">
+                              Máx: {t.maxHours}h/sem
+                              {assigned > 0 && <> · Asignadas: <b style={{ color: assigned > t.maxHours ? '#e53e3e' : '#38a169' }}>{assigned}h</b></>}
+                            </span>
+                          </div>
+                          <button onClick={() => deleteTeacher(t.id)} className="btn-delete"><Trash2 size={16} /></button>
                         </div>
-                        <button onClick={() => deleteTeacher(teacher.id)} className="btn-delete">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -370,45 +247,21 @@ function App() {
                 <div className="section">
                   <h2>Cursos</h2>
                   <div className="form-row">
-                    <input
-                      type="text"
-                      placeholder="Nombre del curso"
-                      value={newCourse.name}
-                      onChange={(e) => setNewCourse({...newCourse, name: e.target.value})}
-                      onKeyPress={(e) => e.key === 'Enter' && addCourse()}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Horas/semana"
-                      value={newCourse.hoursPerWeek}
-                      onChange={(e) => setNewCourse({...newCourse, hoursPerWeek: parseInt(e.target.value)})}
-                      style={{ width: '130px' }}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Duración (horas)"
-                      value={newCourse.duration}
-                      onChange={(e) => setNewCourse({...newCourse, duration: parseInt(e.target.value)})}
-                      style={{ width: '130px' }}
-                    />
-                    <button onClick={addCourse} className="btn-add">
-                      <Plus size={18} />
-                      Agregar
-                    </button>
+                    <input type="text" placeholder="Nombre del curso" value={newCourse.name}
+                      onChange={e => setNewCourse({ ...newCourse, name: e.target.value })}
+                      onKeyPress={e => e.key === 'Enter' && addCourse()} />
+                    <input type="number" placeholder="Duración sesión (h)" style={{ width: 180 }} value={newCourse.duration}
+                      onChange={e => setNewCourse({ ...newCourse, duration: parseInt(e.target.value) })} />
+                    <button onClick={addCourse} className="btn-add"><Plus size={16} /> Agregar</button>
                   </div>
-                  
                   <div className="item-list">
-                    {courses.map(course => (
-                      <div key={course.id} className="item-card">
+                    {courses.map(c => (
+                      <div key={c.id} className="item-card">
                         <div className="item-info">
-                          <strong>{course.name}</strong>
-                          <span className="item-meta">
-                            {course.hoursPerWeek}h/sem • {course.duration}h por sesión
-                          </span>
+                          <strong>{c.name}</strong>
+                          <span className="item-meta">{c.duration}h por sesión</span>
                         </div>
-                        <button onClick={() => deleteCourse(course.id)} className="btn-delete">
-                          <Trash2 size={16} />
-                        </button>
+                        <button onClick={() => deleteCourse(c.id)} className="btn-delete"><Trash2 size={16} /></button>
                       </div>
                     ))}
                   </div>
@@ -419,39 +272,82 @@ function App() {
                 <div className="section">
                   <h2>Grupos</h2>
                   <div className="form-row">
-                    <input
-                      type="text"
-                      placeholder="Nombre del grupo"
-                      value={newGroup.name}
-                      onChange={(e) => setNewGroup({...newGroup, name: e.target.value})}
-                      onKeyPress={(e) => e.key === 'Enter' && addGroup()}
-                    />
-                    <input
-                      type="number"
-                      placeholder="Capacidad"
-                      value={newGroup.capacity}
-                      onChange={(e) => setNewGroup({...newGroup, capacity: parseInt(e.target.value)})}
-                      style={{ width: '120px' }}
-                    />
-                    <button onClick={addGroup} className="btn-add">
-                      <Plus size={18} />
-                      Agregar
-                    </button>
+                    <input type="text" placeholder="Nombre del grupo" value={newGroup.name}
+                      onChange={e => setNewGroup({ ...newGroup, name: e.target.value })}
+                      onKeyPress={e => e.key === 'Enter' && addGroup()} />
+                    <input type="number" placeholder="Capacidad" style={{ width: 120 }} value={newGroup.capacity}
+                      onChange={e => setNewGroup({ ...newGroup, capacity: parseInt(e.target.value) })} />
+                    <button onClick={addGroup} className="btn-add"><Plus size={16} /> Agregar</button>
                   </div>
-                  
                   <div className="item-list">
-                    {groups.map(group => (
-                      <div key={group.id} className="item-card">
+                    {groups.map(g => (
+                      <div key={g.id} className="item-card">
                         <div className="item-info">
-                          <strong>{group.name}</strong>
-                          <span className="item-meta">Capacidad: {group.capacity} estudiantes</span>
+                          <strong>{g.name}</strong>
+                          <span className="item-meta">Capacidad: {g.capacity} estudiantes</span>
                         </div>
-                        <button onClick={() => deleteGroup(group.id)} className="btn-delete">
-                          <Trash2 size={16} />
-                        </button>
+                        <button onClick={() => deleteGroup(g.id)} className="btn-delete"><Trash2 size={16} /></button>
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {activeTab === 'assignments' && (
+                <div className="section">
+                  <h2>Asignaciones</h2>
+                  <p className="section-desc">Define qué profesor imparte qué curso en qué grupo y cuántas horas semanales.</p>
+                  <div className="form-row">
+                    <select value={newAssignment.teacherId} onChange={e => setNewAssignment({ ...newAssignment, teacherId: e.target.value })}>
+                      <option value="">Seleccionar profesor</option>
+                      {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                    <select value={newAssignment.courseId} onChange={e => setNewAssignment({ ...newAssignment, courseId: e.target.value })}>
+                      <option value="">Seleccionar curso</option>
+                      {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <select value={newAssignment.groupId} onChange={e => setNewAssignment({ ...newAssignment, groupId: e.target.value })}>
+                      <option value="">Seleccionar grupo</option>
+                      {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                    <input type="number" placeholder="Horas/semana" style={{ width: 140 }} value={newAssignment.hoursPerWeek}
+                      onChange={e => setNewAssignment({ ...newAssignment, hoursPerWeek: parseInt(e.target.value) })} />
+                    <button onClick={addAssignment} className="btn-add"><Plus size={16} /> Agregar</button>
+                  </div>
+
+                  {teachers.map(teacher => {
+                    const tas = assignments.filter(a => a.teacherId === teacher.id.toString());
+                    if (tas.length === 0) return null;
+                    const totalH = teacherAssignedHours(teacher.id);
+                    return (
+                      <div key={teacher.id} className="teacher-assignments-group">
+                        <div className="teacher-group-header">
+                          <span>👤 {teacher.name}</span>
+                          <span className={`hours-badge ${totalH > teacher.maxHours ? 'over' : ''}`}>{totalH} / {teacher.maxHours}h</span>
+                        </div>
+                        {tas.map(a => {
+                          const course = getCourse(a.courseId);
+                          const group  = getGroup(a.groupId);
+                          return (
+                            <div key={a.id} className="item-card nested">
+                              <div className="item-info">
+                                <strong>{course?.name}</strong>
+                                <span className="item-meta">
+                                  Grupo: {group?.name} · {a.hoursPerWeek}h/sem
+                                  {course && <> · {Math.ceil(a.hoursPerWeek / course.duration)} sesión(es) de {course.duration}h</>}
+                                </span>
+                              </div>
+                              <button onClick={() => deleteAssignment(a.id)} className="btn-delete"><Trash2 size={16} /></button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+
+                  {assignments.length === 0 && (
+                    <div className="empty-state">Aún no hay asignaciones. Agrega profesores, cursos y grupos primero.</div>
+                  )}
                 </div>
               )}
 
@@ -459,53 +355,30 @@ function App() {
                 <div className="section">
                   <h2>Restricciones de Disponibilidad</h2>
                   <div className="form-row">
-                    <select
-                      value={newRestriction.teacherId}
-                      onChange={(e) => setNewRestriction({...newRestriction, teacherId: e.target.value})}
-                    >
+                    <select value={newRestriction.teacherId} onChange={e => setNewRestriction({ ...newRestriction, teacherId: e.target.value })}>
                       <option value="">Seleccionar profesor</option>
-                      {teachers.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
+                      {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
-                    <select
-                      value={newRestriction.day}
-                      onChange={(e) => setNewRestriction({...newRestriction, day: e.target.value})}
-                    >
+                    <select value={newRestriction.day} onChange={e => setNewRestriction({ ...newRestriction, day: e.target.value })}>
                       <option value="">Seleccionar día</option>
-                      {DAYS.map(day => (
-                        <option key={day} value={day}>{day}</option>
-                      ))}
+                      {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
-                    <select
-                      value={newRestriction.timeSlot}
-                      onChange={(e) => setNewRestriction({...newRestriction, timeSlot: e.target.value})}
-                    >
+                    <select value={newRestriction.timeSlot} onChange={e => setNewRestriction({ ...newRestriction, timeSlot: e.target.value })}>
                       <option value="">Seleccionar hora</option>
-                      {timeSlots.map(slot => (
-                        <option key={slot} value={slot}>{slot}</option>
-                      ))}
+                      {timeSlots.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
-                    <button onClick={addRestriction} className="btn-add">
-                      <Plus size={18} />
-                      Agregar
-                    </button>
+                    <button onClick={addRestriction} className="btn-add"><Plus size={16} /> Agregar</button>
                   </div>
-                  
                   <div className="item-list">
-                    {restrictions.map(restriction => {
-                      const teacher = teachers.find(t => t.id.toString() === restriction.teacherId);
+                    {restrictions.map(r => {
+                      const teacher = getTeacher(r.teacherId);
                       return (
-                        <div key={restriction.id} className="item-card">
+                        <div key={r.id} className="item-card">
                           <div className="item-info">
                             <strong>{teacher?.name}</strong>
-                            <span className="item-meta">
-                              No disponible: {restriction.day} a las {restriction.timeSlot}
-                            </span>
+                            <span className="item-meta">No disponible: {r.day} a las {r.timeSlot}</span>
                           </div>
-                          <button onClick={() => deleteRestriction(restriction.id)} className="btn-delete">
-                            <Trash2 size={16} />
-                          </button>
+                          <button onClick={() => deleteRestriction(r.id)} className="btn-delete"><Trash2 size={16} /></button>
                         </div>
                       );
                     })}
@@ -515,10 +388,12 @@ function App() {
             </div>
 
             <div className="action-bar">
-              <button onClick={generateSchedule} className="btn-generate">
-                <Play size={20} />
-                Generar Horario
-              </button>
+              <div className="action-summary">
+                {assignments.length > 0
+                  ? <span>✅ {assignments.length} asignaciones listas para generar</span>
+                  : <span>⚠️ Agrega asignaciones en la pestaña "Asignaciones" para continuar</span>}
+              </div>
+              <button onClick={generateSchedule} className="btn-generate"><Play size={20} /> Generar Horario</button>
             </div>
           </div>
         ) : (
@@ -527,56 +402,28 @@ function App() {
               <h2>Horario Generado</h2>
               <div className="schedule-actions">
                 <div className="view-selector">
-                  <button
-                    className={viewMode === 'general' ? 'view-btn active' : 'view-btn'}
-                    onClick={() => {
-                      setViewMode('general');
-                      setSelectedFilter(null);
-                    }}
-                  >
-                    <Eye size={18} />
-                    Vista General
+                  <button className={viewMode === 'general' ? 'view-btn active' : 'view-btn'} onClick={() => { setViewMode('general'); setSelectedFilter(null); }}>
+                    <Eye size={16} /> General
                   </button>
-                  <button
-                    className={viewMode === 'teacher' ? 'view-btn active' : 'view-btn'}
-                    onClick={() => setViewMode('teacher')}
-                  >
-                    <Users size={18} />
-                    Por Profesor
+                  <button className={viewMode === 'teacher' ? 'view-btn active' : 'view-btn'} onClick={() => setViewMode('teacher')}>
+                    <Users size={16} /> Por Profesor
                   </button>
-                  <button
-                    className={viewMode === 'group' ? 'view-btn active' : 'view-btn'}
-                    onClick={() => setViewMode('group')}
-                  >
-                    <Filter size={18} />
-                    Por Grupo
+                  <button className={viewMode === 'group' ? 'view-btn active' : 'view-btn'} onClick={() => setViewMode('group')}>
+                    <Filter size={16} /> Por Grupo
                   </button>
                 </div>
-                
                 {(viewMode === 'teacher' || viewMode === 'group') && (
-                  <select
-                    value={selectedFilter || ''}
-                    onChange={(e) => setSelectedFilter(parseInt(e.target.value))}
-                    className="filter-select"
-                  >
+                  <select className="filter-select" value={selectedFilter || ''} onChange={e => setSelectedFilter(parseInt(e.target.value))}>
                     <option value="">Seleccionar...</option>
-                    {viewMode === 'teacher' 
+                    {viewMode === 'teacher'
                       ? teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)
-                      : groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)
-                    }
+                      : groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                   </select>
                 )}
-                
-                <button onClick={exportSchedule} className="btn-export">
-                  <Download size={18} />
-                  Exportar
-                </button>
-                <button onClick={() => setSchedule(null)} className="btn-secondary">
-                  Volver a Editar
-                </button>
+                <button onClick={exportSchedule} className="btn-export"><Download size={16} /> Exportar</button>
+                <button onClick={() => setSchedule(null)} className="btn-secondary">← Editar</button>
               </div>
             </div>
-            
             {renderScheduleGrid()}
           </div>
         )}

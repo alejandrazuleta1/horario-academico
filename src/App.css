@@ -434,3 +434,74 @@ input:focus, select:focus {
     width: 100%;
   }
 }
+
+/* ── ASSIGNMENTS ─────────────────────────────────────── */
+.section-desc {
+  color: #718096;
+  font-size: 0.95rem;
+  margin-bottom: 1.5rem;
+  background: #ebf8ff;
+  border-left: 4px solid #63b3ed;
+  padding: 0.75rem 1rem;
+  border-radius: 0 8px 8px 0;
+}
+
+.teacher-assignments-group {
+  margin-bottom: 1.5rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.teacher-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  background: #edf2f7;
+  font-weight: 700;
+  color: #2d3748;
+  font-size: 1rem;
+}
+
+.hours-badge {
+  background: #c6f6d5;
+  color: #276749;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.hours-badge.over {
+  background: #fed7d7;
+  color: #9b2c2c;
+}
+
+.item-card.nested {
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.item-card.nested:last-child {
+  border-bottom: none;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: #a0aec0;
+  font-size: 1rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 2px dashed #e2e8f0;
+}
+
+.action-summary {
+  font-size: 0.95rem;
+  color: #4a5568;
+  display: flex;
+  align-items: center;
+}
